@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  keydb:
+    image: eqalpha/keydb:latest
+    container_name: checkpoint-keydb-parser
+    ports:
+      - "6379:6379"
+    volumes:
+      - keydb_data:/data
+    command: keydb-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "keydb-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - parser-network
+
+  parser:
+    build: .
+    container_name: checkpoint-parser
+    environment:
+      - KEYDB_HOST=keydb
+      - KEYDB_PORT=6379
+      - KEYDB_PASSWORD=${KEYDB_PASSWORD:-}
+    depends_on:
+      keydb:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - parser-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  keydb_data:
+    driver: local
+
+networks:
+  parser-network:
+    driver: bridge
+

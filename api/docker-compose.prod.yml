@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  keydb:
+    image: eqalpha/keydb:latest
+    container_name: checkpoint-keydb-prod
+    ports:
+      - "6379:6379"
+    volumes:
+      - keydb_data:/data
+      - ./keydb.conf:/usr/local/etc/keydb/keydb.conf:ro
+    command: keydb-server /usr/local/etc/keydb/keydb.conf
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "keydb-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - checkpoint-network
+
+  api:
+    build: 
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: checkpoint-api-prod
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - KEYDB_HOST=keydb
+      - KEYDB_PORT=6379
+      - KEYDB_PASSWORD=${KEYDB_PASSWORD:-}
+      - AUTH_USERNAME=${AUTH_USERNAME:-admin}
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-checkpoint2025}
+      - RATE_LIMIT=${RATE_LIMIT:-3000}
+      - GIN_MODE=release
+    depends_on:
+      keydb:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - checkpoint-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: checkpoint-nginx-prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - api
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - checkpoint-network
+
+volumes:
+  keydb_data:
+    driver: local
+  nginx_logs:
+    driver: local
+
+networks:
+  checkpoint-network:
+    driver: bridge
