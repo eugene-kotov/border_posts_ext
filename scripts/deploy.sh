@@ -41,7 +41,14 @@ check_dependencies() {
         exit 1
     fi
     
-    if ! command -v docker-compose &> /dev/null; then
+    # Check for Docker Compose v2 (docker compose) or v1 (docker-compose)
+    if docker compose version >/dev/null 2>&1; then
+        DOCKER_COMPOSE="docker compose"
+        log "Using Docker Compose v2"
+    elif command -v docker-compose &> /dev/null; then
+        DOCKER_COMPOSE="docker-compose"
+        log "Using Docker Compose v1"
+    else
         error "Docker Compose is not installed or not in PATH"
         exit 1
     fi
@@ -70,13 +77,13 @@ start_services() {
     check_dependencies
     check_env_file
     
-    docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME up -d
+    $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME up -d
     
     log "Waiting for services to be healthy..."
     sleep 15
     
     # Check health
-    if docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME ps | grep -q "Up (healthy)"; then
+    if $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME ps | grep -q "Up (healthy)"; then
         success "Services started successfully"
         show_status
     else
@@ -89,7 +96,7 @@ start_services() {
 # Stop services
 stop_services() {
     log "Stopping all services..."
-    docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME down
+    $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME down
     success "Services stopped"
 }
 
@@ -104,7 +111,7 @@ restart_services() {
 # Show status
 show_status() {
     log "Service status:"
-    docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME ps
+    $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME ps
     
     echo ""
     log "Health check:"
@@ -120,7 +127,7 @@ show_status() {
     
     echo ""
     log "Parser status:"
-    if docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME logs parser | tail -5 | grep -q "✅"; then
+    if $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME logs parser | tail -5 | grep -q "✅"; then
         success "Parser is running"
     else
         warning "Parser may not be running properly"
@@ -130,7 +137,7 @@ show_status() {
 # Show logs
 show_logs() {
     log "Showing recent logs..."
-    docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME logs --tail=50
+    $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME logs --tail=50
 }
 
 # Show logs for specific service
@@ -140,7 +147,7 @@ show_service_logs() {
         show_logs
     else
         log "Showing logs for $service..."
-        docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME logs --tail=50 $service
+        $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME logs --tail=50 $service
     fi
 }
 
@@ -149,10 +156,10 @@ update_services() {
     log "Updating all services..."
     
     # Pull latest images
-    docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME pull
+    $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME pull
     
     # Rebuild and restart
-    docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME up -d --build
+    $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME up -d --build
     
     # Clean up old images
     docker image prune -f
@@ -168,8 +175,8 @@ backup_data() {
     mkdir -p $BACKUP_DIR
     
     # Backup KeyDB data
-    docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T keydb keydb-cli --rdb /data/backup.rdb
-    docker cp $(docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME ps -q keydb):/data/backup.rdb $BACKUP_DIR/
+    $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME exec -T keydb keydb-cli --rdb /data/backup.rdb
+    docker cp $($DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME ps -q keydb):/data/backup.rdb $BACKUP_DIR/
     
     # Backup parser logs
     if [ -d "parser/logs" ]; then
@@ -221,4 +228,3 @@ case "${1:-start}" in
         exit 1
         ;;
 esac
-
