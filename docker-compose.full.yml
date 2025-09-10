@@ -153,7 +153,6 @@ services:
       - "443:443"
     volumes:
       - ./nginx.loadbalancer.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro
       - nginx_logs:/var/log/nginx
     depends_on:
       - api1
