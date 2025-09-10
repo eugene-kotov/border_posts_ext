@@ -16,6 +16,7 @@ NC='\033[0m' # No Color
 COMPOSE_FILE="docker-compose.prod.yml"
 PROJECT_NAME="checkpoint-prod"
 BACKUP_DIR="backups/$(date +%Y%m%d_%H%M%S)"
+ALTERNATIVE_PORT="6380"
 
 # Logging function
 log() {
@@ -84,6 +85,64 @@ check_keydb_issues() {
     fi
 }
 
+# Check and free port 6379
+check_and_free_port() {
+    log "Checking port 6379 availability..."
+    
+    # Check if port is in use by Docker containers
+    local port_containers=$(docker ps --format "table {{.Names}}\t{{.Ports}}" | grep ":6379" || true)
+    if [ -n "$port_containers" ]; then
+        log "Port 6379 is in use by Docker containers:"
+        echo "$port_containers"
+        
+        # Stop all containers using port 6379
+        log "Stopping containers using port 6379..."
+        docker ps --format "{{.Names}}" | grep -E "(keydb|redis)" | xargs -r docker stop
+        sleep 5
+    fi
+    
+    # Check if port is in use by system processes
+    if command -v netstat &> /dev/null; then
+        local port_processes=$(netstat -tlnp 2>/dev/null | grep ":6379" || true)
+        if [ -n "$port_processes" ]; then
+            warning "Port 6379 is in use by system processes:"
+            echo "$port_processes"
+            warning "You may need to stop these processes manually"
+        fi
+    elif command -v ss &> /dev/null; then
+        local port_processes=$(ss -tlnp | grep ":6379" || true)
+        if [ -n "$port_processes" ]; then
+            warning "Port 6379 is in use by system processes:"
+            echo "$port_processes"
+            warning "You may need to stop these processes manually"
+        fi
+    fi
+}
+
+# Create temporary docker-compose with alternative port
+create_temp_compose() {
+    log "Creating temporary docker-compose with port $ALTERNATIVE_PORT..."
+    
+    # Backup original compose file
+    cp $COMPOSE_FILE ${COMPOSE_FILE}.backup
+    
+    # Create temporary compose file with alternative port
+    sed "s/6379:6379/${ALTERNATIVE_PORT}:6379/g" $COMPOSE_FILE > ${COMPOSE_FILE}.tmp
+    COMPOSE_FILE="${COMPOSE_FILE}.tmp"
+    
+    warning "Using alternative port $ALTERNATIVE_PORT instead of 6379"
+    warning "Remember to update your API configuration to use port $ALTERNATIVE_PORT"
+}
+
+# Restore original docker-compose
+restore_compose() {
+    if [ -f "${COMPOSE_FILE}.backup" ]; then
+        log "Restoring original docker-compose file..."
+        mv ${COMPOSE_FILE}.backup $COMPOSE_FILE
+        rm -f ${COMPOSE_FILE}.tmp
+    fi
+}
+
 # Fix KeyDB configuration
 fix_keydb() {
     log "Fixing KeyDB RDB file issues..."
@@ -93,6 +152,9 @@ fix_keydb() {
     if [[ "$1" == "--backup" ]] || [[ "$2" == "--backup" ]]; then
         create_backup
     fi
+    
+    # Check and free port 6379
+    check_and_free_port
     
     # Stop containers
     log "Stopping containers..."
@@ -123,7 +185,21 @@ fix_keydb() {
     
     # Start containers
     log "Starting containers with fixed configuration..."
-    $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME up -d
+    if ! $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME up -d; then
+        error "Failed to start containers. Port 6379 might be in use."
+        
+        # Try with alternative port
+        log "Attempting to start with alternative port $ALTERNATIVE_PORT..."
+        create_temp_compose
+        
+        if ! $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME up -d; then
+            error "Failed to start containers even with alternative port"
+            restore_compose
+            exit 1
+        fi
+        
+        success "Containers started with alternative port $ALTERNATIVE_PORT"
+    fi
     
     # Wait for services to be healthy
     log "Waiting for services to be healthy..."
@@ -142,8 +218,12 @@ fix_keydb() {
         success "KeyDB RDB issues have been resolved!"
     else
         error "KeyDB RDB issues persist. Check logs for more details."
+        restore_compose
         exit 1
     fi
+    
+    # Clean up temporary files
+    restore_compose
 }
 
 # Show usage
