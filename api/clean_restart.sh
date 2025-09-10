@@ -85,11 +85,11 @@ docker network prune -f
 # Step 9: Verify port 6379 is free
 log "9️⃣ Проверка доступности порта 6379..."
 if command -v netstat &> /dev/null; then
-    local port_check=$(netstat -tln 2>/dev/null | grep ":6379" || true)
+    port_check=$(netstat -tln 2>/dev/null | grep ":6379" || true)
 elif command -v ss &> /dev/null; then
-    local port_check=$(ss -tln | grep ":6379" || true)
+    port_check=$(ss -tln | grep ":6379" || true)
 else
-    local port_check=""
+    port_check=""
 fi
 
 if [ -n "$port_check" ]; then
@@ -120,7 +120,7 @@ $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME ps
 log "1️⃣4️⃣ Тестирование сервисов..."
 
 # Test KeyDB
-local keydb_port="6379"
+keydb_port="6379"
 if [ "$COMPOSE_FILE" = "docker-compose.prod-alt.yml" ]; then
     keydb_port="6380"
 fi
