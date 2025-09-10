@@ -34,7 +34,18 @@ docker stop checkpoint-nginx-full 2>/dev/null || true
 
 # Перезапустить Nginx с исправленной конфигурацией
 log "Перезапуск Nginx..."
-docker-compose -f docker-compose.full.yml -p checkpoint-full up -d nginx
+
+# Определить команду Docker Compose
+if docker compose version >/dev/null 2>&1; then
+    DOCKER_COMPOSE="docker compose"
+elif command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE="docker-compose"
+else
+    error "Docker Compose не найден"
+    exit 1
+fi
+
+$DOCKER_COMPOSE -f docker-compose.full.yml -p checkpoint-full up -d nginx
 
 # Ждать запуска
 sleep 10
@@ -75,5 +86,5 @@ echo "• Логи Nginx: docker logs checkpoint-nginx-full"
 echo "• Логи API1: docker logs checkpoint-api1-full"
 echo "• Логи API2: docker logs checkpoint-api2-full"
 echo "• Логи API3: docker logs checkpoint-api3-full"
-echo "• Статус: docker-compose -f docker-compose.full.yml -p checkpoint-full ps"
+echo "• Статус: $DOCKER_COMPOSE -f docker-compose.full.yml -p checkpoint-full ps"
 echo "• Тест API: curl http://localhost/health"
