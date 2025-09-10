@@ -32,12 +32,25 @@ warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
+# Check Docker Compose command
+check_docker_compose() {
+    if docker compose version >/dev/null 2>&1; then
+        DOCKER_COMPOSE="docker compose"
+    elif command -v docker-compose &> /dev/null; then
+        DOCKER_COMPOSE="docker-compose"
+    else
+        error "Docker Compose is not installed or not in PATH"
+        exit 1
+    fi
+}
+
 # Health check
 check_health() {
     log "Performing health checks..."
+    check_docker_compose
     
     # Check if services are running
-    if ! docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME ps | grep -q "Up"; then
+    if ! $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME ps | grep -q "Up"; then
         error "Some services are not running"
         return 1
     fi
@@ -45,7 +58,7 @@ check_health() {
     # Check API health endpoint
     if command -v curl &> /dev/null; then
         local health_response=$(curl -s http://localhost/health 2>/dev/null || echo "ERROR")
-        if [[ "$health_response" == *"healthy"* ]]; then
+        if [[ "$health_response" == *"healthy"* ]] || [[ "$health_response" == *"UP"* ]]; then
             success "API health check passed"
             echo "Response: $health_response"
         else
@@ -57,7 +70,7 @@ check_health() {
     fi
     
     # Check KeyDB connection
-    if docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T keydb keydb-cli ping | grep -q "PONG"; then
+    if $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME exec -T keydb keydb-cli ping | grep -q "PONG"; then
         success "KeyDB is responding"
     else
         error "KeyDB is not responding"
@@ -65,7 +78,7 @@ check_health() {
     fi
     
     # Check parser status
-    local parser_logs=$(docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME logs parser | tail -10)
+    local parser_logs=$($DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME logs parser | tail -10)
     if echo "$parser_logs" | grep -q "✅\|🔄\|📊"; then
         success "Parser is active"
     else
@@ -78,24 +91,25 @@ check_health() {
 # Show metrics
 show_metrics() {
     log "Collecting metrics..."
+    check_docker_compose
     
     echo ""
     echo "=== Container Status ==="
-    docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME ps
+    $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME ps
     
     echo ""
     echo "=== Resource Usage ==="
     docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}" \
-        $(docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME ps -q)
+        $($DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME ps -q)
     
     echo ""
     echo "=== KeyDB Info ==="
-    docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T keydb keydb-cli info memory | head -10
-    docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T keydb keydb-cli info clients | head -5
+    $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME exec -T keydb keydb-cli info memory | head -10
+    $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME exec -T keydb keydb-cli info clients | head -5
     
     echo ""
     echo "=== Parser Status ==="
-    docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME logs parser | tail -5
+    $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME logs parser | tail -5
     
     echo ""
     echo "=== API Metrics ==="
@@ -108,18 +122,19 @@ show_metrics() {
 # Check parser specifically
 check_parser() {
     log "Checking parser status..."
+    check_docker_compose
     
     echo ""
     echo "=== Parser Container Status ==="
-    docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME ps parser
+    $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME ps parser
     
     echo ""
     echo "=== Recent Parser Logs ==="
-    docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME logs parser | tail -20
+    $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME logs parser | tail -20
     
     echo ""
     echo "=== Parser Health Check ==="
-    if docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME ps parser | grep -q "Up"; then
+    if $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME ps parser | grep -q "Up"; then
         success "Parser container is running"
     else
         error "Parser container is not running"
@@ -127,7 +142,7 @@ check_parser() {
     
     echo ""
     echo "=== KeyDB Data Check ==="
-    local checkpoint_count=$(docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T keydb keydb-cli scard checkpoints:all 2>/dev/null || echo "0")
+    local checkpoint_count=$($DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME exec -T keydb keydb-cli scard checkpoints:all 2>/dev/null || echo "0")
     echo "Total checkpoints in KeyDB: $checkpoint_count"
     
     if [ "$checkpoint_count" -gt 0 ]; then
@@ -140,6 +155,7 @@ check_parser() {
 # Check for alerts
 check_alerts() {
     log "Checking for alerts..."
+    check_docker_compose
     
     local alerts=0
     
@@ -164,14 +180,14 @@ check_alerts() {
     fi
     
     # Check container restart count
-    local restart_count=$(docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME ps | grep -c "Restarting" || true)
+    local restart_count=$($DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME ps | grep -c "Restarting" || true)
     if [ "$restart_count" -gt 0 ]; then
         warning "Some containers are restarting"
         ((alerts++))
     fi
     
     # Check parser data freshness
-    local checkpoint_count=$(docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T keydb keydb-cli scard checkpoints:all 2>/dev/null || echo "0")
+    local checkpoint_count=$($DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME exec -T keydb keydb-cli scard checkpoints:all 2>/dev/null || echo "0")
     if [ "$checkpoint_count" -eq 0 ]; then
         warning "No checkpoint data in KeyDB - parser may not be working"
         ((alerts++))
@@ -236,4 +252,3 @@ case "${1:-health}" in
         exit 1
         ;;
 esac
-

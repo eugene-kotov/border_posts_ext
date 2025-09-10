@@ -331,3 +331,4 @@ docker-compose -f docker-compose.full.yml pull
 
 **Система готова к продакшену!** 🚀
 
+

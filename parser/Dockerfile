@@ -34,3 +34,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # Run the parser
 CMD ["python", "new_checkpoint_data.py"]
 
+

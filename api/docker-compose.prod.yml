@@ -10,6 +10,7 @@ services:
       - keydb_data:/data
       - ./keydb.conf:/usr/local/etc/keydb/keydb.conf:ro
     command: keydb-server /usr/local/etc/keydb/keydb.conf
+    working_dir: /data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "keydb-cli", "ping"]
