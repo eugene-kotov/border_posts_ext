@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   keydb:
     image: eqalpha/keydb:latest
@@ -48,13 +46,11 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  api:
+  api1:
     build: 
       context: ./api
       dockerfile: Dockerfile.prod
-    container_name: checkpoint-api-full
-    ports:
-      - "8080:8080"
+    container_name: checkpoint-api1-full
     environment:
       - PORT=8080
       - KEYDB_HOST=keydb
@@ -62,8 +58,75 @@ services:
       - KEYDB_PASSWORD=${KEYDB_PASSWORD:-}
       - AUTH_USERNAME=${AUTH_USERNAME:-admin}
       - AUTH_PASSWORD=${AUTH_PASSWORD:-checkpoint2025}
-      - RATE_LIMIT=${RATE_LIMIT:-3000}
+      - RATE_LIMIT=${RATE_LIMIT:-1000}
       - GIN_MODE=release
+      - INSTANCE_ID=api1
+    depends_on:
+      keydb:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - checkpoint-network
+
+  api2:
+    build: 
+      context: ./api
+      dockerfile: Dockerfile.prod
+    container_name: checkpoint-api2-full
+    environment:
+      - PORT=8080
+      - KEYDB_HOST=keydb
+      - KEYDB_PORT=6379
+      - KEYDB_PASSWORD=${KEYDB_PASSWORD:-}
+      - AUTH_USERNAME=${AUTH_USERNAME:-admin}
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-checkpoint2025}
+      - RATE_LIMIT=${RATE_LIMIT:-1000}
+      - GIN_MODE=release
+      - INSTANCE_ID=api2
+    depends_on:
+      keydb:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - checkpoint-network
+
+  api3:
+    build: 
+      context: ./api
+      dockerfile: Dockerfile.prod
+    container_name: checkpoint-api3-full
+    environment:
+      - PORT=8080
+      - KEYDB_HOST=keydb
+      - KEYDB_PORT=6379
+      - KEYDB_PASSWORD=${KEYDB_PASSWORD:-}
+      - AUTH_USERNAME=${AUTH_USERNAME:-admin}
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-checkpoint2025}
+      - RATE_LIMIT=${RATE_LIMIT:-1000}
+      - GIN_MODE=release
+      - INSTANCE_ID=api3
     depends_on:
       keydb:
         condition: service_healthy
@@ -89,11 +152,13 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./api/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx.loadbalancer.conf:/etc/nginx/nginx.conf:ro
       - ./ssl:/etc/nginx/ssl:ro
       - nginx_logs:/var/log/nginx
     depends_on:
-      - api
+      - api1
+      - api2
+      - api3
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
