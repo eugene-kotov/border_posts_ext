@@ -9,6 +9,14 @@ services:
       - ./api/keydb.conf:/usr/local/etc/keydb/keydb.conf:ro
     command: keydb-server /usr/local/etc/keydb/keydb.conf
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 150M
+        reservations:
+          cpus: '0.2'
+          memory: 100M
     healthcheck:
       test: ["CMD", "keydb-cli", "ping"]
       interval: 10s
@@ -18,8 +26,8 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: "5m"
+        max-file: "2"
     networks:
       - checkpoint-network
 
@@ -36,6 +44,14 @@ services:
       keydb:
         condition: service_healthy
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.4'
+          memory: 150M
+        reservations:
+          cpus: '0.1'
+          memory: 50M
     volumes:
       - ./parser/logs:/app/logs
     networks:
@@ -43,14 +59,14 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: "5m"
+        max-file: "2"
 
-  api1:
+  api:
     build: 
       context: ./api
       dockerfile: Dockerfile.prod
-    container_name: checkpoint-api1-full
+    container_name: checkpoint-api-full
     environment:
       - PORT=8080
       - KEYDB_HOST=keydb
@@ -58,13 +74,20 @@ services:
       - KEYDB_PASSWORD=${KEYDB_PASSWORD:-}
       - AUTH_USERNAME=${AUTH_USERNAME:-admin}
       - AUTH_PASSWORD=${AUTH_PASSWORD:-checkpoint2025}
-      - RATE_LIMIT=${RATE_LIMIT:-1000}
       - GIN_MODE=release
-      - INSTANCE_ID=api1
+      - INSTANCE_ID=api
     depends_on:
       keydb:
         condition: service_healthy
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.8'
+          memory: 200M
+        reservations:
+          cpus: '0.3'
+          memory: 100M
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
@@ -74,76 +97,11 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: "5m"
+        max-file: "2"
     networks:
       - checkpoint-network
 
-  api2:
-    build: 
-      context: ./api
-      dockerfile: Dockerfile.prod
-    container_name: checkpoint-api2-full
-    environment:
-      - PORT=8080
-      - KEYDB_HOST=keydb
-      - KEYDB_PORT=6379
-      - KEYDB_PASSWORD=${KEYDB_PASSWORD:-}
-      - AUTH_USERNAME=${AUTH_USERNAME:-admin}
-      - AUTH_PASSWORD=${AUTH_PASSWORD:-checkpoint2025}
-      - RATE_LIMIT=${RATE_LIMIT:-1000}
-      - GIN_MODE=release
-      - INSTANCE_ID=api2
-    depends_on:
-      keydb:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    networks:
-      - checkpoint-network
-
-  api3:
-    build: 
-      context: ./api
-      dockerfile: Dockerfile.prod
-    container_name: checkpoint-api3-full
-    environment:
-      - PORT=8080
-      - KEYDB_HOST=keydb
-      - KEYDB_PORT=6379
-      - KEYDB_PASSWORD=${KEYDB_PASSWORD:-}
-      - AUTH_USERNAME=${AUTH_USERNAME:-admin}
-      - AUTH_PASSWORD=${AUTH_PASSWORD:-checkpoint2025}
-      - RATE_LIMIT=${RATE_LIMIT:-1000}
-      - GIN_MODE=release
-      - INSTANCE_ID=api3
-    depends_on:
-      keydb:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    networks:
-      - checkpoint-network
 
   nginx:
     image: nginx:alpine
@@ -155,10 +113,16 @@ services:
       - ./nginx.loadbalancer.conf:/etc/nginx/nginx.conf:ro
       - nginx_logs:/var/log/nginx
     depends_on:
-      - api1
-      - api2
-      - api3
+      - api
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 100M
+        reservations:
+          cpus: '0.1'
+          memory: 50M
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
       interval: 30s
@@ -167,8 +131,8 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: "5m"
+        max-file: "2"
     networks:
       - checkpoint-network
 

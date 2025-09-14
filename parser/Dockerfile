@@ -35,3 +35,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 CMD ["python", "new_checkpoint_data.py"]
 
 
+
+

@@ -103,3 +103,5 @@ echo "• Check status: $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME ps"
 echo "• View logs: $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME logs"
 echo "• Stop services: $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME down"
 echo "• Connect to KeyDB: keydb-cli -p 6380"
+
+

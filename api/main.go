@@ -12,7 +12,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
-	"golang.org/x/time/rate"
 )
 
 // Config содержит конфигурацию приложения
@@ -23,7 +22,6 @@ type Config struct {
 	KeyDBPassword string
 	AuthUsername string
 	AuthPassword string
-	RateLimit    int
 }
 
 // CheckpointInfo основная информация о пункте пропуска
@@ -256,23 +254,6 @@ func (k *KeyDBService) GetSummaryStats() (*SummaryStats, error) {
 	return stats, nil
 }
 
-// RateLimiterMiddleware middleware для ограничения скорости запросов
-func RateLimiterMiddleware(requestsPerMinute int) gin.HandlerFunc {
-	limiter := rate.NewLimiter(rate.Limit(requestsPerMinute/60.0), requestsPerMinute)
-	
-	return func(c *gin.Context) {
-		if !limiter.Allow() {
-			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error": "Rate limit exceeded",
-				"limit": requestsPerMinute,
-			})
-			c.Abort()
-			return
-		}
-		c.Next()
-	}
-}
-
 // BasicAuthMiddleware middleware для Basic Authentication
 func BasicAuthMiddleware(username, password string) gin.HandlerFunc {
 	return gin.BasicAuth(gin.Accounts{
@@ -289,7 +270,6 @@ func loadConfig() *Config {
 		KeyDBPassword: getEnv("KEYDB_PASSWORD", ""),
 		AuthUsername: getEnv("AUTH_USERNAME", "admin"),
 		AuthPassword: getEnv("AUTH_PASSWORD", "password"),
-		RateLimit:    getEnvInt("RATE_LIMIT", 3000),
 	}
 }
 
@@ -345,7 +325,6 @@ func main() {
 
 	// API endpoints с авторизацией
 	api := r.Group("/api/v1")
-	api.Use(RateLimiterMiddleware(config.RateLimit))
 	api.Use(BasicAuthMiddleware(config.AuthUsername, config.AuthPassword))
 
 	// Получить все пункты пропуска
@@ -442,7 +421,6 @@ func main() {
 	})
 
 	log.Printf("🚀 Server starting on port %s", config.Port)
-	log.Printf("📊 Rate limit: %d requests per minute", config.RateLimit)
 	log.Printf("🔐 Basic auth: %s", config.AuthUsername)
 	
 	if err := r.Run(":" + config.Port); err != nil {

@@ -1,5 +1,5 @@
 # Multi-stage build for production
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates tzdata
@@ -16,8 +16,8 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o checkpoint-api .
+# Build the application with optimizations for small memory footprint
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-w -s -extldflags '-static'" -trimpath -o checkpoint-api .
 
 # Final stage
 FROM alpine:latest

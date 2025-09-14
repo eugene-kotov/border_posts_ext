@@ -38,7 +38,6 @@ services:
       - KEYDB_PASSWORD=${KEYDB_PASSWORD:-}
       - AUTH_USERNAME=${AUTH_USERNAME:-admin}
       - AUTH_PASSWORD=${AUTH_PASSWORD:-checkpoint2025}
-      - RATE_LIMIT=${RATE_LIMIT:-3000}
       - GIN_MODE=release
     depends_on:
       keydb:

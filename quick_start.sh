@@ -90,3 +90,5 @@ echo "• Логи: docker-compose -f docker-compose.full.yml -p checkpoint-full
 echo "• Остановка: docker-compose -f docker-compose.full.yml -p checkpoint-full down"
 echo "• Тест API: curl http://localhost/health"
 echo "• Тест с авторизацией: curl -H 'Authorization: Basic dHJ1Y2tkcml2ZXI6Y2hlY2twb2ludEAyMDI1' http://localhost/api/v1/checkpoints"
+
+
