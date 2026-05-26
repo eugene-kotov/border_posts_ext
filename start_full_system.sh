@@ -52,7 +52,7 @@ check_docker_compose
 
 # Stop existing containers
 log "1️⃣ Остановка существующих контейнеров..."
-$DOCKER_COMPOSE -f docker-compose.prod.yml -p checkpoint-prod down 2>/dev/null || true
+$DOCKER_COMPOSE -f api/docker-compose.prod.yml -p checkpoint-prod down 2>/dev/null || true
 $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME down 2>/dev/null || true
 
 # Remove obsolete version warning by creating a clean compose file
@@ -85,16 +85,13 @@ else
     error "❌ KeyDB не отвечает"
 fi
 
-# Test API instances
-log "6️⃣ Тестирование API инстансов..."
-api_instances=("api1" "api2" "api3")
-for api in "${api_instances[@]}"; do
-    if $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME exec -T $api wget --quiet --tries=1 --spider http://localhost:8080/health; then
-        success "✅ $api работает"
-    else
-        warning "⚠️ $api не отвечает"
-    fi
-done
+# Test API
+log "6️⃣ Тестирование API..."
+if $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME exec -T api wget --quiet --tries=1 --spider http://localhost:8080/health; then
+    success "✅ API работает"
+else
+    warning "⚠️ API не отвечает"
+fi
 
 # Test load balancer
 if command -v curl &> /dev/null; then
@@ -148,7 +145,7 @@ echo "• Логи парсера: $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_
 echo "• Логи API: $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME logs -f api"
 echo "• Логи KeyDB: $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME logs -f keydb"
 echo "• Остановка: $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME down"
-echo "• Подключение к KeyDB: keydb-cli -h localhost -p 6379"
+echo "• Подключение к KeyDB: docker exec -it checkpoint-keydb-full keydb-cli"
 echo "• Проверка API: curl http://localhost/health"
 echo ""
 echo -e "${GREEN}🌐 Доступные сервисы:${NC}"

@@ -12,9 +12,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Configuration
-COMPOSE_FILE="docker-compose.prod.yml"
-PROJECT_NAME="checkpoint-prod"
+# Configuration — используем единый compose-файл проекта
+COMPOSE_FILE="../docker-compose.full.yml"
+PROJECT_NAME="checkpoint-full"
 
 # Logging function
 log() {
@@ -82,22 +82,8 @@ docker volume prune -f
 log "8️⃣ Очистка неиспользуемых сетей..."
 docker network prune -f
 
-# Step 9: Verify port 6379 is free
-log "9️⃣ Проверка доступности порта 6379..."
-if command -v netstat &> /dev/null; then
-    port_check=$(netstat -tln 2>/dev/null | grep ":6379" || true)
-elif command -v ss &> /dev/null; then
-    port_check=$(ss -tln | grep ":6379" || true)
-else
-    port_check=""
-fi
-
-if [ -n "$port_check" ]; then
-    warning "Порт 6379 все еще занят:"
-    echo "$port_check"
-    warning "Попробуем использовать альтернативный порт 6380..."
-    COMPOSE_FILE="docker-compose.prod-alt.yml"
-fi
+# Step 9: KeyDB порт не пробрасывается на хост — проверка порта не нужна
+log "9️⃣ KeyDB работает только внутри Docker network (порт не проброшен на хост)"
 
 # Step 10: Create local data directory
 log "🔟 Создание локальной директории для данных..."
@@ -120,13 +106,8 @@ $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME ps
 log "1️⃣4️⃣ Тестирование сервисов..."
 
 # Test KeyDB
-keydb_port="6379"
-if [ "$COMPOSE_FILE" = "docker-compose.prod-alt.yml" ]; then
-    keydb_port="6380"
-fi
-
 if $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME exec -T keydb keydb-cli ping | grep -q "PONG"; then
-    success "✅ KeyDB работает на порту $keydb_port"
+    success "✅ KeyDB работает"
 else
     error "❌ KeyDB не отвечает"
 fi
@@ -155,5 +136,5 @@ echo ""
 echo -e "${YELLOW}📝 Полезные команды:${NC}"
 echo "• Просмотр логов: $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME logs -f"
 echo "• Остановка: $DOCKER_COMPOSE -f $COMPOSE_FILE -p $PROJECT_NAME down"
-echo "• Подключение к KeyDB: keydb-cli -p $keydb_port"
+echo "• Подключение к KeyDB: docker exec -it checkpoint-keydb-full keydb-cli"
 echo "• Проверка API: curl http://localhost/health"

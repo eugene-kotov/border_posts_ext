@@ -62,15 +62,12 @@ fi
 
 # Проверить API инстансы
 log "Проверка API инстансов..."
-for i in {1..3}; do
-    if docker exec checkpoint-api${i}-full wget --quiet --tries=1 --spider http://localhost:8080/health 2>/dev/null; then
-        success "API$i работает"
-    else
-        error "API$i не работает"
-        log "Логи API$i:"
-        docker logs checkpoint-api${i}-full --tail 5
-    fi
-done
+if docker exec checkpoint-api-full wget --quiet --tries=1 --spider http://localhost:8080/health 2>/dev/null; then
+    success "✅ API работает"
+else
+    warning "⚠️ API не отвечает"
+    docker logs checkpoint-api-full --tail 5
+fi
 
 # Тест HTTP
 log "Тестирование HTTP..."
@@ -83,8 +80,7 @@ fi
 echo ""
 log "📋 Команды для диагностики:"
 echo "• Логи Nginx: docker logs checkpoint-nginx-full"
-echo "• Логи API1: docker logs checkpoint-api1-full"
-echo "• Логи API2: docker logs checkpoint-api2-full"
-echo "• Логи API3: docker logs checkpoint-api3-full"
+echo "• Логи API: docker logs checkpoint-api-full"
+echo "• Логи KeyDB: docker logs checkpoint-keydb-full"
 echo "• Статус: $DOCKER_COMPOSE -f docker-compose.full.yml -p checkpoint-full ps"
 echo "• Тест API: curl http://localhost/health"

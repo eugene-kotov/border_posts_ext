@@ -2,8 +2,8 @@ services:
   keydb:
     image: eqalpha/keydb:latest
     container_name: checkpoint-keydb-full
-    ports:
-      - "6379:6379"
+    # Порт НЕ пробрасывается на хост — API и parser подключаются по Docker network (keydb:6379)
+    # Для отладки: docker exec checkpoint-keydb-full keydb-cli
     volumes:
       - keydb_data:/data
       - ./api/keydb.conf:/usr/local/etc/keydb/keydb.conf:ro
@@ -103,15 +103,15 @@ services:
       - checkpoint-network
 
 
-  nginx:
-    image: nginx:alpine
-    container_name: checkpoint-nginx-full
+  angie:
+    image: docker.angie.software/angie:latest
+    container_name: checkpoint-angie-full
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx.loadbalancer.conf:/etc/nginx/nginx.conf:ro
-      - nginx_logs:/var/log/nginx
+      - ./angie.loadbalancer.conf:/etc/angie/angie.conf:ro
+      - angie_logs:/var/log/angie
     depends_on:
       - api
     restart: unless-stopped
@@ -139,7 +139,7 @@ services:
 volumes:
   keydb_data:
     driver: local
-  nginx_logs:
+  angie_logs:
     driver: local
 
 networks:

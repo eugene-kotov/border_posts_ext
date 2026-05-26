@@ -1,3 +1,6 @@
+# ⚠️ DEPRECATED: Этот файл устарел. Используйте docker-compose.full.yml в корне проекта.
+# Оставлен для справки. НЕ запускайте его напрямую — это приведёт к конфликту KeyDB инстансов.
+
 services:
   keydb:
     image: eqalpha/keydb:latest

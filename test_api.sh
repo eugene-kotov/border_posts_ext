@@ -102,16 +102,11 @@ test_api_auth() {
 test_direct_api() {
     log "Тестирование прямого подключения к API инстансам..."
     
-    for i in {1..3}; do
-        log "Тестирование api$i..."
-        
-        # Проверяем health каждого инстанса
-        if docker exec checkpoint-api${i}-full wget --quiet --tries=1 --spider http://localhost:8080/health 2>/dev/null; then
-            success "api$i работает"
-        else
-            error "api$i не работает"
-        fi
-    done
+    if docker exec checkpoint-api-full wget --quiet --tries=1 --spider http://localhost:8080/health 2>/dev/null; then
+        success "✅ API работает внутри контейнера"
+    else
+        error "❌ API не отвечает внутри контейнера"
+    fi
 }
 
 # Основная функция
@@ -132,7 +127,7 @@ main() {
     echo ""
     log "Полезные команды для отладки:"
     echo "• Логи Nginx: docker logs checkpoint-nginx-full"
-    echo "• Логи API: docker logs checkpoint-api1-full"
+    echo "• Логи API: docker logs checkpoint-api-full"
     echo "• Логи KeyDB: docker logs checkpoint-keydb-full"
     echo "• Статус контейнеров: docker-compose -f docker-compose.full.yml -p checkpoint-full ps"
     echo "• Подключение к KeyDB: docker exec -it checkpoint-keydb-full keydb-cli"

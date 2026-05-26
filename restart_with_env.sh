@@ -84,12 +84,8 @@ log "Проверка статуса контейнеров..."
 $DOCKER_COMPOSE -f docker-compose.full.yml -p checkpoint-full ps
 
 # Проверить переменные окружения в контейнерах
-log "Проверка переменных окружения в API контейнерах..."
-for i in {1..3}; do
-    log "API$i переменные:"
-    docker exec checkpoint-api${i}-full env | grep -E "(KEYDB_|AUTH_|RATE_LIMIT|INSTANCE_ID)" || true
-    echo ""
-done
+log "Проверка переменных окружения в API контейнере..."
+docker exec checkpoint-api-full env | grep -E "(KEYDB_|AUTH_|RATE_LIMIT|INSTANCE_ID)" || true
 
 # Тест сервисов
 log "Тестирование сервисов..."
@@ -101,16 +97,14 @@ else
     error "KeyDB не работает"
 fi
 
-# Тест API инстансов
-for i in {1..3}; do
-    if docker exec checkpoint-api${i}-full wget --quiet --tries=1 --spider http://localhost:8080/health 2>/dev/null; then
-        success "API$i работает"
-    else
-        error "API$i не работает"
-        log "Логи API$i:"
-        docker logs checkpoint-api${i}-full --tail 5
-    fi
-done
+# Тест API
+if docker exec checkpoint-api-full wget --quiet --tries=1 --spider http://localhost:8080/health 2>/dev/null; then
+    success "API работает"
+else
+    error "API не работает"
+    log "Логи API:"
+    docker logs checkpoint-api-full --tail 5
+fi
 
 # Тест Nginx
 if curl -s --connect-timeout 5 http://localhost/health > /dev/null 2>&1; then
