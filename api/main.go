@@ -127,16 +127,70 @@ func (k *KeyDBService) GetAllCheckpointIDs() ([]string, error) {
 	return k.client.SMembers(k.ctx, "checkpoints:all").Result()
 }
 
-// GetCheckpoint получает данные пункта пропуска по ID
+// GetCheckpoint получает данные пункта пропуска по ID (Pipeline: 1 round-trip, 4 команды)
 func (k *KeyDBService) GetCheckpoint(id string) (*Checkpoint, error) {
-	checkpoint := &Checkpoint{ID: id}
+	pipe := k.client.Pipeline()
 
-	// Получаем основную информацию
-	infoData, err := k.client.HGetAll(k.ctx, fmt.Sprintf("checkpoint:%s:info", id)).Result()
+	infoCmd := pipe.HGetAll(k.ctx, fmt.Sprintf("checkpoint:%s:info", id))
+	statsCmd := pipe.HGetAll(k.ctx, fmt.Sprintf("checkpoint:%s:stats", id))
+	loadCmd := pipe.HGetAll(k.ctx, fmt.Sprintf("checkpoint:%s:load_data", id))
+	metaCmd := pipe.HGetAll(k.ctx, fmt.Sprintf("checkpoint:%s:meta", id))
+
+	if _, err := pipe.Exec(k.ctx); err != nil && err != redis.Nil {
+		return nil, err
+	}
+
+	return parseCheckpointFromResults(id, infoCmd.Val(), statsCmd.Val(), loadCmd.Val(), metaCmd.Val()), nil
+}
+
+// GetAllCheckpoints получает все пункты пропуска одним Pipeline (решает N+1)
+func (k *KeyDBService) GetAllCheckpoints() ([]Checkpoint, error) {
+	ids, err := k.GetAllCheckpointIDs()
 	if err != nil {
 		return nil, err
 	}
-	
+
+	if len(ids) == 0 {
+		return []Checkpoint{}, nil
+	}
+
+	// Один Pipeline = один round-trip для всех checkpoints
+	pipe := k.client.Pipeline()
+
+	type checkpointCmds struct {
+		info  *redis.StringStringMapCmd
+		stats *redis.StringStringMapCmd
+		load  *redis.StringStringMapCmd
+		meta  *redis.StringStringMapCmd
+	}
+
+	cmds := make([]checkpointCmds, len(ids))
+	for i, id := range ids {
+		cmds[i] = checkpointCmds{
+			info:  pipe.HGetAll(k.ctx, fmt.Sprintf("checkpoint:%s:info", id)),
+			stats: pipe.HGetAll(k.ctx, fmt.Sprintf("checkpoint:%s:stats", id)),
+			load:  pipe.HGetAll(k.ctx, fmt.Sprintf("checkpoint:%s:load_data", id)),
+			meta:  pipe.HGetAll(k.ctx, fmt.Sprintf("checkpoint:%s:meta", id)),
+		}
+	}
+
+	if _, err := pipe.Exec(k.ctx); err != nil && err != redis.Nil {
+		return nil, err
+	}
+
+	checkpoints := make([]Checkpoint, 0, len(ids))
+	for i, id := range ids {
+		cp := parseCheckpointFromResults(id, cmds[i].info.Val(), cmds[i].stats.Val(), cmds[i].load.Val(), cmds[i].meta.Val())
+		checkpoints = append(checkpoints, *cp)
+	}
+
+	return checkpoints, nil
+}
+
+// parseCheckpointFromResults парсит данные checkpoint из результатов HGETALL
+func parseCheckpointFromResults(id string, infoData, statsData, loadDataRaw, metaData map[string]string) *Checkpoint {
+	checkpoint := &Checkpoint{ID: id}
+
 	checkpoint.Info = CheckpointInfo{
 		NameRU:        infoData["name_ru"],
 		NameKZ:        infoData["name_kz"],
@@ -146,12 +200,6 @@ func (k *KeyDBService) GetCheckpoint(id string) (*Checkpoint, error) {
 		Phone:         infoData["phone"],
 		Coordinates:   infoData["coordinates"],
 		WorkingHours:  infoData["working_hours"],
-	}
-
-	// Получаем статистику
-	statsData, err := k.client.HGetAll(k.ctx, fmt.Sprintf("checkpoint:%s:stats", id)).Result()
-	if err != nil {
-		return nil, err
 	}
 
 	totalDays, _ := strconv.Atoi(statsData["total_days"])
@@ -176,12 +224,6 @@ func (k *KeyDBService) GetCheckpoint(id string) (*Checkpoint, error) {
 		Min100MRP:   min100MRP,
 	}
 
-	// Получаем данные загруженности
-	loadDataRaw, err := k.client.HGetAll(k.ctx, fmt.Sprintf("checkpoint:%s:load_data", id)).Result()
-	if err != nil {
-		return nil, err
-	}
-
 	var loadData []LoadData
 	for i := 0; i < len(loadDataRaw); i++ {
 		dayDataStr := loadDataRaw[strconv.Itoa(i)]
@@ -192,12 +234,6 @@ func (k *KeyDBService) GetCheckpoint(id string) (*Checkpoint, error) {
 	}
 	checkpoint.LoadData = loadData
 
-	// Получаем метаданные
-	metaData, err := k.client.HGetAll(k.ctx, fmt.Sprintf("checkpoint:%s:meta", id)).Result()
-	if err != nil {
-		return nil, err
-	}
-
 	dataCount, _ := strconv.Atoi(metaData["data_count"])
 	checkpoint.Metadata = CheckpointMetadata{
 		LastUpdated: metaData["last_updated"],
@@ -205,10 +241,10 @@ func (k *KeyDBService) GetCheckpoint(id string) (*Checkpoint, error) {
 		DataCount:   dataCount,
 	}
 
-	return checkpoint, nil
+	return checkpoint
 }
 
-// GetSummaryStats получает сводную статистику
+// GetSummaryStats получает сводную статистику (Pipeline: загружает только stats, не load_data/meta)
 func (k *KeyDBService) GetSummaryStats() (*SummaryStats, error) {
 	allIDs, err := k.GetAllCheckpointIDs()
 	if err != nil {
@@ -220,26 +256,42 @@ func (k *KeyDBService) GetSummaryStats() (*SummaryStats, error) {
 		LastUpdated:      time.Now().Format(time.RFC3339),
 	}
 
+	if len(allIDs) == 0 {
+		return stats, nil
+	}
+
+	// Pipeline: загружаем ТОЛЬКО stats хэши (не info, load_data, meta)
+	pipe := k.client.Pipeline()
+	statsCmds := make([]*redis.StringStringMapCmd, len(allIDs))
+	for i, id := range allIDs {
+		statsCmds[i] = pipe.HGetAll(k.ctx, fmt.Sprintf("checkpoint:%s:stats", id))
+	}
+
+	if _, err := pipe.Exec(k.ctx); err != nil && err != redis.Nil {
+		return nil, err
+	}
+
 	var totalWorkingDays, totalHolidays int
 	var avg1MRPSum, avg100MRPSum float64
 	var validCheckpoints int
 
-	for _, id := range allIDs {
-		checkpoint, err := k.GetCheckpoint(id)
-		if err != nil {
-			continue
-		}
+	for _, cmd := range statsCmds {
+		statsData := cmd.Val()
+		workingDays, _ := strconv.Atoi(statsData["working_days"])
+		holidays, _ := strconv.Atoi(statsData["holidays"])
+		avg1MRP, _ := strconv.ParseFloat(statsData["avg_1mrp"], 64)
+		avg100MRP, _ := strconv.ParseFloat(statsData["avg_100mrp"], 64)
 
-		totalWorkingDays += checkpoint.Stats.WorkingDays
-		totalHolidays += checkpoint.Stats.Holidays
+		totalWorkingDays += workingDays
+		totalHolidays += holidays
 
-		if checkpoint.Stats.Avg1MRP > 0 {
-			avg1MRPSum += checkpoint.Stats.Avg1MRP
+		if avg1MRP > 0 {
+			avg1MRPSum += avg1MRP
 			validCheckpoints++
 		}
 
-		if checkpoint.Stats.Avg100MRP > 0 {
-			avg100MRPSum += checkpoint.Stats.Avg100MRP
+		if avg100MRP > 0 {
+			avg100MRPSum += avg100MRP
 		}
 	}
 
@@ -337,20 +389,10 @@ func main() {
 			return
 		}
 
-		ids, err := keydbService.GetAllCheckpointIDs()
+		checkpoints, err := keydbService.GetAllCheckpoints()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
-		}
-
-		var checkpoints []Checkpoint
-		for _, id := range ids {
-			checkpoint, err := keydbService.GetCheckpoint(id)
-			if err != nil {
-				log.Printf("Error getting checkpoint %s: %v", id, err)
-				continue
-			}
-			checkpoints = append(checkpoints, *checkpoint)
 		}
 
 		c.JSON(http.StatusOK, gin.H{
