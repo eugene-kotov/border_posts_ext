@@ -1,0 +1,20 @@
+[Unit]
+Description=Checkpoint Parser - Python data parser
+After=checkpoint-keydb.service
+Requires=checkpoint-keydb.service
+
+[Container]
+Image=localhost/checkpoint-parser:latest
+ContainerName=checkpoint-parser
+Network=checkpoint.network
+Environment=KEYDB_HOST=checkpoint-keydb
+Environment=KEYDB_PORT=6379
+Environment=KEYDB_PASSWORD=
+Volume=%E/border_posts_ext/parser/logs:/app/logs:Z
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

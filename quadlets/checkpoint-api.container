@@ -1,0 +1,28 @@
+[Unit]
+Description=Checkpoint API - Go REST API
+After=checkpoint-keydb.service
+Requires=checkpoint-keydb.service
+
+[Container]
+Image=localhost/checkpoint-api:latest
+ContainerName=checkpoint-api
+Network=checkpoint.network
+Environment=PORT=8080
+Environment=KEYDB_HOST=checkpoint-keydb
+Environment=KEYDB_PORT=6379
+Environment=KEYDB_PASSWORD=
+Environment=AUTH_USERNAME=admin
+Environment=AUTH_PASSWORD=checkpoint2025
+Environment=GIN_MODE=release
+HealthCmd=wget --quiet --tries=1 --spider http://localhost:8080/health || exit 1
+HealthInterval=30s
+HealthTimeout=10s
+HealthRetries=3
+HealthStartPeriod=40s
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target
