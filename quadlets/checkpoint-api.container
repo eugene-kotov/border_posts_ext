@@ -21,8 +21,6 @@ HealthStartPeriod=40s
 [Service]
 Restart=always
 TimeoutStartSec=120
-MemoryMax=64M
-CPUQuota=30%
 
 [Install]
 WantedBy=default.target

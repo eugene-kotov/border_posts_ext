@@ -15,8 +15,6 @@ Volume=%E/border_posts_ext/parser/logs:/app/logs:Z
 [Service]
 Restart=always
 TimeoutStartSec=120
-MemoryMax=80M
-CPUQuota=30%
 
 [Install]
 WantedBy=default.target

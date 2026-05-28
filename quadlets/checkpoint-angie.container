@@ -21,8 +21,6 @@ AutoUpdate=registry
 [Service]
 Restart=always
 TimeoutStartSec=60
-MemoryMax=64M
-CPUQuota=10%
 
 [Install]
 WantedBy=default.target
