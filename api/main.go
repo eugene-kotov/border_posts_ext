@@ -7,7 +7,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -470,8 +472,38 @@ func main() {
 
 	log.Printf("🚀 Server starting on port %s", config.Port)
 	log.Printf("🔐 Basic auth: %s", config.AuthUsername)
-	
-	if err := r.Run(":" + config.Port); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+
+	// HTTP сервер с graceful shutdown
+	srv := &http.Server{
+		Addr:    ":" + config.Port,
+		Handler: r,
 	}
+
+	// Запускаем сервер в горутине
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Failed to start server: %v", err)
+		}
+	}()
+
+	// Ожидаем сигнал завершения
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-quit
+	log.Printf("🛑 Received signal %v, shutting down gracefully...", sig)
+
+	// Даём 5 секунд на завершение in-flight запросов
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("⚠️  Server forced to shutdown: %v", err)
+	}
+
+	// Закрываем KeyDB соединение
+	if err := keydbService.client.Close(); err != nil {
+		log.Printf("⚠️  KeyDB connection close error: %v", err)
+	}
+
+	log.Println("✅ Server stopped gracefully")
 }
