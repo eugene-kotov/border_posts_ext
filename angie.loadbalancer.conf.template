@@ -100,12 +100,12 @@ http {
 
     # Upstream API server
     upstream api_backend {
-        server api:8080 max_fails=3 fail_timeout=30s weight=1;
+        server checkpoint-api:8080 max_fails=3 fail_timeout=30s weight=1;
         # NOTE: Активные health probes доступны только в Angie PRO
     }
 
     upstream health_backend {
-        server api:8080;
+        server checkpoint-api:8080;
     }
 
     # ──────────────────────────────────────────────
