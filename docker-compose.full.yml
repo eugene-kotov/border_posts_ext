@@ -112,6 +112,7 @@ services:
     volumes:
       - ./angie.loadbalancer.conf:/etc/angie/angie.conf:ro
       - angie_logs:/var/log/angie
+      - acme_data:/var/lib/angie/acme
     depends_on:
       - api
     restart: unless-stopped
@@ -140,6 +141,8 @@ volumes:
   keydb_data:
     driver: local
   angie_logs:
+    driver: local
+  acme_data:
     driver: local
 
 networks:
