@@ -204,10 +204,10 @@ build: ## Build API and Parser container images
 	@podman pull docker.angie.software/angie:latest
 	@echo ""
 	@echo "🔨 Building checkpoint-api..."
-	@podman build --format docker -t localhost/checkpoint-api:latest -f $(PROJECT_DIR)/api/Dockerfile.prod $(PROJECT_DIR)/api
+	@podman build --network=host --format docker -t localhost/checkpoint-api:latest -f $(PROJECT_DIR)/api/Dockerfile.prod $(PROJECT_DIR)/api
 	@echo ""
 	@echo "🔨 Building checkpoint-parser..."
-	@podman build --format docker -t localhost/checkpoint-parser:latest -f $(PROJECT_DIR)/parser/Dockerfile $(PROJECT_DIR)/parser
+	@podman build --network=host --format docker -t localhost/checkpoint-parser:latest -f $(PROJECT_DIR)/parser/Dockerfile $(PROJECT_DIR)/parser
 	@echo ""
 	@echo "✅ Images built:"
 	@podman images --format "  {{.Repository}}:{{.Tag}}  {{.Size}}" | grep -E 'checkpoint|keydb|angie'
