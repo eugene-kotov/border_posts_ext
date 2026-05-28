@@ -1,0 +1,25 @@
+[Unit]
+Description=Checkpoint Angie - Reverse proxy & load balancer
+After=checkpoint-api.service
+Requires=checkpoint-api.service
+
+[Container]
+Image=docker.angie.software/angie:latest
+ContainerName=checkpoint-angie
+Network=checkpoint.network
+PublishPort=80:80
+PublishPort=443:443
+Volume=%E/border_posts_ext/angie.loadbalancer.conf:/etc/angie/angie.conf:ro,Z
+Volume=checkpoint-angie-logs.volume:/var/log/angie
+HealthCmd=wget --quiet --tries=1 --spider http://localhost/health || exit 1
+HealthInterval=30s
+HealthTimeout=10s
+HealthRetries=3
+AutoUpdate=registry
+
+[Service]
+Restart=always
+TimeoutStartSec=60
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,24 @@
+[Unit]
+Description=Checkpoint KeyDB - In-memory data store
+After=checkpoint.network
+
+[Container]
+Image=eqalpha/keydb:latest
+ContainerName=checkpoint-keydb
+Network=checkpoint.network
+Volume=checkpoint-keydb.volume:/data
+Volume=%E/border_posts_ext/api/keydb.conf:/usr/local/etc/keydb/keydb.conf:ro,Z
+Exec=keydb-server /usr/local/etc/keydb/keydb.conf
+HealthCmd=keydb-cli ping
+HealthInterval=10s
+HealthTimeout=3s
+HealthRetries=3
+HealthStartPeriod=30s
+AutoUpdate=registry
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target
