@@ -95,6 +95,17 @@ install: ## Install quadlet files to systemd and reload
 	@echo "  Quadlet files:"
 	@ls -1 $(QUADLET_DIR)/checkpoint-* 2>/dev/null || echo "  (none found)"
 	@echo ""
+	@echo "  Generated services:"
+	@for svc in $(SERVICES); do \
+		if $(SYSTEMCTL) cat $$svc >/dev/null 2>&1; then \
+			echo "  ✅ $$svc.service"; \
+		else \
+			echo "  ❌ $$svc.service NOT generated"; \
+			echo "     Debug: $(SYSTEMCTL) cat $$svc"; \
+			echo "     Check: /usr/lib/systemd/system-generators/podman-system-generator"; \
+		fi; \
+	done
+	@echo ""
 	@echo "  Next: make build && make start"
 
 # ─────────────────────────────────────────────────────────────
@@ -189,10 +200,10 @@ tls-test: ## Test TLS handshake and configuration
 # ─────────────────────────────────────────────────────────────
 build: ## Build API and Parser container images
 	@echo "🔨 Building checkpoint-api..."
-	@podman build -t localhost/checkpoint-api:latest -f $(PROJECT_DIR)/api/Dockerfile.prod $(PROJECT_DIR)/api
+	@podman build --format docker -t localhost/checkpoint-api:latest -f $(PROJECT_DIR)/api/Dockerfile.prod $(PROJECT_DIR)/api
 	@echo ""
 	@echo "🔨 Building checkpoint-parser..."
-	@podman build -t localhost/checkpoint-parser:latest -f $(PROJECT_DIR)/parser/Dockerfile $(PROJECT_DIR)/parser
+	@podman build --format docker -t localhost/checkpoint-parser:latest -f $(PROJECT_DIR)/parser/Dockerfile $(PROJECT_DIR)/parser
 	@echo ""
 	@echo "✅ Images built:"
 	@podman images --format "  {{.Repository}}:{{.Tag}}  {{.Size}}" | grep checkpoint
