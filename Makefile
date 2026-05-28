@@ -199,6 +199,10 @@ tls-test: ## Test TLS handshake and configuration
 # Build images
 # ─────────────────────────────────────────────────────────────
 build: ## Build API and Parser container images
+	@echo "📥 Pulling external images..."
+	@podman pull docker.io/eqalpha/keydb:latest
+	@podman pull docker.angie.software/angie:latest
+	@echo ""
 	@echo "🔨 Building checkpoint-api..."
 	@podman build --format docker -t localhost/checkpoint-api:latest -f $(PROJECT_DIR)/api/Dockerfile.prod $(PROJECT_DIR)/api
 	@echo ""
@@ -206,7 +210,7 @@ build: ## Build API and Parser container images
 	@podman build --format docker -t localhost/checkpoint-parser:latest -f $(PROJECT_DIR)/parser/Dockerfile $(PROJECT_DIR)/parser
 	@echo ""
 	@echo "✅ Images built:"
-	@podman images --format "  {{.Repository}}:{{.Tag}}  {{.Size}}" | grep checkpoint
+	@podman images --format "  {{.Repository}}:{{.Tag}}  {{.Size}}" | grep -E 'checkpoint|keydb|angie'
 
 # ─────────────────────────────────────────────────────────────
 # Service lifecycle

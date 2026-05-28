@@ -21,7 +21,7 @@ AutoUpdate=registry
 [Service]
 Restart=always
 TimeoutStartSec=60
-MemoryMax=32M
+MemoryMax=64M
 CPUQuota=10%
 
 [Install]
