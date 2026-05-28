@@ -2,7 +2,7 @@
 Description=Checkpoint KeyDB - In-memory data store
 
 [Container]
-Image=eqalpha/keydb:latest
+Image=docker.io/eqalpha/keydb:latest
 ContainerName=checkpoint-keydb
 Network=checkpoint.network
 Volume=checkpoint-keydb.volume:/data
