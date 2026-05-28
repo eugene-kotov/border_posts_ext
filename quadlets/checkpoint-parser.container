@@ -11,14 +11,12 @@ Environment=KEYDB_HOST=checkpoint-keydb
 Environment=KEYDB_PORT=6379
 EnvironmentFile=%E/border_posts_ext/.env
 Volume=%E/border_posts_ext/parser/logs:/app/logs:Z
-PodmanArgs=--memory=80m --cpus=0.3
-LogDriver=json-file
-LogOpt=max-size=2m
-LogOpt=max-file=2
 
 [Service]
 Restart=always
 TimeoutStartSec=120
+MemoryMax=80M
+CPUQuota=30%
 
 [Install]
 WantedBy=default.target

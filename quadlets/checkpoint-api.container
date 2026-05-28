@@ -17,14 +17,12 @@ HealthInterval=30s
 HealthTimeout=10s
 HealthRetries=3
 HealthStartPeriod=40s
-PodmanArgs=--memory=64m --cpus=0.3
-LogDriver=json-file
-LogOpt=max-size=2m
-LogOpt=max-file=2
 
 [Service]
 Restart=always
 TimeoutStartSec=120
+MemoryMax=64M
+CPUQuota=30%
 
 [Install]
 WantedBy=default.target
