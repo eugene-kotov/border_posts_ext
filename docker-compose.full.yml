@@ -1,3 +1,9 @@
+# ──────────────────────────────────────────────
+# Checkpoint System — Docker Compose
+# Target VPS: 1 CPU / 512 MB RAM / 6 GB SSD
+# Total allocation: 0.9 CPU / 240 MB (leaves ~270 MB for OS + Docker)
+# ──────────────────────────────────────────────
+
 services:
   keydb:
     image: eqalpha/keydb:latest
@@ -12,27 +18,27 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 150M
-        reservations:
           cpus: '0.2'
-          memory: 100M
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 16M
     healthcheck:
       test: ["CMD", "keydb-cli", "ping"]
-      interval: 10s
+      interval: 30s
       timeout: 3s
       retries: 3
       start_period: 30s
     logging:
       driver: "json-file"
       options:
-        max-size: "5m"
+        max-size: "2m"
         max-file: "2"
     networks:
       - checkpoint-network
 
   parser:
-    build: 
+    build:
       context: ./parser
       dockerfile: Dockerfile
     container_name: checkpoint-parser-full
@@ -47,11 +53,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.4'
-          memory: 150M
+          cpus: '0.3'
+          memory: 80M
         reservations:
-          cpus: '0.1'
-          memory: 50M
+          cpus: '0.05'
+          memory: 32M
     volumes:
       - ./parser/logs:/app/logs
     networks:
@@ -59,11 +65,11 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-size: "5m"
+        max-size: "2m"
         max-file: "2"
 
   api:
-    build: 
+    build:
       context: ./api
       dockerfile: Dockerfile.prod
     container_name: checkpoint-api-full
@@ -75,7 +81,6 @@ services:
       - AUTH_USERNAME=${AUTH_USERNAME}
       - AUTH_PASSWORD=${AUTH_PASSWORD}
       - GIN_MODE=release
-      - INSTANCE_ID=api
     depends_on:
       keydb:
         condition: service_healthy
@@ -83,11 +88,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.8'
-          memory: 200M
-        reservations:
           cpus: '0.3'
-          memory: 100M
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 8M
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "-O", "/dev/null", "http://localhost:8080/health"]
       interval: 30s
@@ -97,11 +102,10 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-size: "5m"
+        max-size: "2m"
         max-file: "2"
     networks:
       - checkpoint-network
-
 
   angie:
     image: docker.angie.software/angie:latest
@@ -119,11 +123,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.3'
-          memory: 100M
-        reservations:
           cpus: '0.1'
-          memory: 50M
+          memory: 32M
+        reservations:
+          cpus: '0.05'
+          memory: 8M
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "-O", "/dev/null", "http://127.0.0.1/health"]
       interval: 30s
@@ -132,7 +136,7 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-size: "5m"
+        max-size: "2m"
         max-file: "2"
     networks:
       - checkpoint-network
@@ -148,5 +152,3 @@ volumes:
 networks:
   checkpoint-network:
     driver: bridge
-
-
