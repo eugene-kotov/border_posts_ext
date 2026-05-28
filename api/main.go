@@ -315,14 +315,20 @@ func BasicAuthMiddleware(username, password string) gin.HandlerFunc {
 
 // loadConfig загружает конфигурацию из переменных окружения
 func loadConfig() *Config {
-	return &Config{
-		Port:         getEnv("PORT", "8080"),
-		KeyDBHost:    getEnv("KEYDB_HOST", "localhost"),
-		KeyDBPort:    getEnv("KEYDB_PORT", "6379"),
+	cfg := &Config{
+		Port:          getEnv("PORT", "8080"),
+		KeyDBHost:     getEnv("KEYDB_HOST", "localhost"),
+		KeyDBPort:     getEnv("KEYDB_PORT", "6379"),
 		KeyDBPassword: getEnv("KEYDB_PASSWORD", ""),
-		AuthUsername: getEnv("AUTH_USERNAME", "admin"),
-		AuthPassword: getEnv("AUTH_PASSWORD", "password"),
+		AuthUsername:  os.Getenv("AUTH_USERNAME"),
+		AuthPassword:  os.Getenv("AUTH_PASSWORD"),
 	}
+
+	if cfg.AuthUsername == "" || cfg.AuthPassword == "" {
+		log.Fatal("FATAL: AUTH_USERNAME and AUTH_PASSWORD environment variables are required")
+	}
+
+	return cfg
 }
 
 // getEnv получает переменную окружения или возвращает значение по умолчанию

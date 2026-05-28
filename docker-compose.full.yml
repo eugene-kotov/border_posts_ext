@@ -72,8 +72,8 @@ services:
       - KEYDB_HOST=keydb
       - KEYDB_PORT=6379
       - KEYDB_PASSWORD=${KEYDB_PASSWORD:-}
-      - AUTH_USERNAME=${AUTH_USERNAME:-admin}
-      - AUTH_PASSWORD=${AUTH_PASSWORD:-checkpoint2025}
+      - AUTH_USERNAME=${AUTH_USERNAME}
+      - AUTH_PASSWORD=${AUTH_PASSWORD}
       - GIN_MODE=release
       - INSTANCE_ID=api
     depends_on:

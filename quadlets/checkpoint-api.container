@@ -10,11 +10,9 @@ Network=checkpoint.network
 Environment=PORT=8080
 Environment=KEYDB_HOST=checkpoint-keydb
 Environment=KEYDB_PORT=6379
-Environment=KEYDB_PASSWORD=
-Environment=AUTH_USERNAME=admin
-Environment=AUTH_PASSWORD=checkpoint2025
 Environment=GIN_MODE=release
-HealthCmd=wget --quiet --tries=1 --spider http://localhost:8080/health || exit 1
+EnvironmentFile=%E/border_posts_ext/.env
+HealthCmd=wget --quiet --tries=1 -O /dev/null http://localhost:8080/health || exit 1
 HealthInterval=30s
 HealthTimeout=10s
 HealthRetries=3

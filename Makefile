@@ -45,9 +45,9 @@ ANGIE_CONF     := $(PROJECT_DIR)/angie.loadbalancer.conf
 ANGIE_TEMPLATE := $(PROJECT_DIR)/angie.loadbalancer.conf.template
 KEYDB_CONF     := $(PROJECT_DIR)/api/keydb.conf
 
-# API auth (from .env or defaults)
-API_USER ?= admin
-API_PASS ?= checkpoint2025
+# API auth (loaded from .env via AUTH_USERNAME / AUTH_PASSWORD)
+API_USER := $(or $(AUTH_USERNAME),$(error AUTH_USERNAME not set. Run: make env-init && edit .env))
+API_PASS := $(or $(AUTH_PASSWORD),$(error AUTH_PASSWORD not set. Run: make env-init && edit .env))
 API_URL  := https://$(DOMAIN)
 API_URL_HTTP := http://$(DOMAIN)
 

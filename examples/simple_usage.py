@@ -5,12 +5,13 @@
 
 import requests
 import json
+import os
 from requests.auth import HTTPBasicAuth
 
-# Конфигурация
-API_BASE_URL = "http://localhost"
-API_USERNAME = "admin"
-API_PASSWORD = "checkpoint2025"  # Измените на ваш пароль
+# Конфигурация (из переменных окружения)
+API_BASE_URL = os.getenv("API_BASE_URL", "https://checkpoint.truck.kz")
+API_USERNAME = os.environ["AUTH_USERNAME"]  # обязательная переменная
+API_PASSWORD = os.environ["AUTH_PASSWORD"]  # обязательная переменная
 
 def get_health_status():
     """Получить статус здоровья системы"""
