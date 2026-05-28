@@ -1,5 +1,5 @@
 [Unit]
-Description=Checkpoint Angie - Reverse proxy & load balancer
+Description=Checkpoint Angie - Reverse proxy & TLS termination
 After=checkpoint-api.service
 Requires=checkpoint-api.service
 
@@ -11,11 +11,16 @@ PublishPort=80:80
 PublishPort=443:443
 Volume=%E/border_posts_ext/angie.loadbalancer.conf:/etc/angie/angie.conf:ro,Z
 Volume=checkpoint-angie-logs.volume:/var/log/angie
-HealthCmd=wget --quiet --tries=1 --spider http://localhost/health || exit 1
+Volume=checkpoint-acme.volume:/var/lib/angie/acme
+HealthCmd=wget --quiet --tries=1 -O /dev/null http://127.0.0.1/health || exit 1
 HealthInterval=30s
 HealthTimeout=10s
 HealthRetries=3
 AutoUpdate=registry
+PodmanArgs=--memory=32m --cpus=0.1
+LogDriver=json-file
+LogOpt=max-size=2m
+LogOpt=max-file=2
 
 [Service]
 Restart=always

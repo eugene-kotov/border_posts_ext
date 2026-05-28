@@ -10,11 +10,15 @@ Volume=checkpoint-keydb.volume:/data
 Volume=%E/border_posts_ext/api/keydb.conf:/usr/local/etc/keydb/keydb.conf:ro,Z
 Exec=keydb-server /usr/local/etc/keydb/keydb.conf
 HealthCmd=keydb-cli ping
-HealthInterval=10s
+HealthInterval=30s
 HealthTimeout=3s
 HealthRetries=3
 HealthStartPeriod=30s
 AutoUpdate=registry
+PodmanArgs=--memory=64m --cpus=0.2
+LogDriver=json-file
+LogOpt=max-size=2m
+LogOpt=max-file=2
 
 [Service]
 Restart=always
