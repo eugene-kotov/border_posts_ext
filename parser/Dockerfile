@@ -22,7 +22,7 @@ USER appuser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import redis; r=redis.Redis(host='keydb', port=6379, decode_responses=True); r.ping()" || exit 1
+    CMD python -c "import redis; r=redis.Redis(host='checkpoint-keydb', port=6379, decode_responses=True); r.ping()" || exit 1
 
 # Run the parser
 CMD ["python", "new_checkpoint_data.py"]

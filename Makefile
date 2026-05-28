@@ -285,10 +285,11 @@ health: ## Run health checks on all services
 	@podman exec checkpoint-keydb keydb-cli ping 2>/dev/null && true || echo "❌ FAIL"
 	@# API
 	@printf "  API:    "
-	@curl -sf $(API_URL)/health 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print('✅ ' + d['status'] + ' (keydb: ' + d['keydb_status'] + ')')" 2>/dev/null || echo "❌ FAIL"
+	@curl -sf $(API_URL)/health 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print('✅ ' + d['status'] + ' (keydb: ' + d['keydb_status'] + ')')" 2>/dev/null || \
+		curl -sf http://localhost/health 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print('✅ ' + d['status'] + ' (keydb: ' + d['keydb_status'] + ')')" 2>/dev/null || echo "❌ FAIL"
 	@# Angie
 	@printf "  Angie:  "
-	@curl -sf $(API_URL)/status 2>/dev/null | head -1 | grep -q "Active" && echo "✅ active" || echo "❌ FAIL"
+	@curl -sf http://localhost/health >/dev/null 2>&1 && echo "✅ proxying" || echo "❌ FAIL"
 	@echo ""
 
 test: ## Test API endpoints
