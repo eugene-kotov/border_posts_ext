@@ -1,364 +1,189 @@
-# Checkpoint System - Полная система мониторинга пунктов пропуска
+# Checkpoint System
 
-Высокопроизводительная система для автоматического сбора, хранения и предоставления данных о загруженности пунктов пропуска через REST API.
+Система мониторинга загруженности пунктов пропуска Казахстана. Автоматический сбор данных с [cgr.qoldau.kz](https://cgr.qoldau.kz) и REST API для доступа.
 
-## 🏗️ Архитектура системы
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Python Parser │    │     Nginx       │    │   Go API 1.23   │    │     KeyDB       │
-│   (Container)   │───▶│   (Port 80/443) │───▶│   (Port 8080)   │───▶│   (Port 6379)   │
-│   Data Collector│    │   Proxy Server  │    │   Application   │    │   Database      │
-│   Every 7 min   │    │   Static Files  │    │   Auth & Logic  │    │   Persistence   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
-```
-
-### Компоненты системы:
-- **Python Parser** - Автоматический сбор данных каждые 7 минут
-- **Nginx** - Прокси-сервер и статические файлы
-- **Go API 1.23** - Высокопроизводительный REST API
-- **KeyDB** - In-memory база данных для быстрого доступа
-
-## 📁 Структура проекта
+## Архитектура
 
 ```
-release/
-├── api/                           # Go API сервис (Go 1.23)
-│   ├── main.go                   # Основной код API
-│   ├── go.mod                    # Go зависимости
-│   ├── go.sum                    # Go зависимости (checksums)
-│   ├── Dockerfile.prod           # Docker образ для API
-│   ├── docker-compose.prod.yml   # Конфигурация API + KeyDB + Nginx
-│   ├── keydb.conf                # Конфигурация KeyDB (оптимизированная)
-│   ├── nginx.prod.conf           # Конфигурация Nginx
-│   └── env.prod.example          # Пример переменных окружения
-├── parser/                       # Python парсер
-│   ├── new_checkpoint_data.py    # Основной код парсера
-│   ├── links.txt                 # Список URL для парсинга
-│   ├── test_keydb.py             # Тест подключения к KeyDB
-│   ├── requirements.txt          # Python зависимости
-│   ├── Dockerfile                # Docker образ для парсера
-│   └── docker-compose.yml        # Конфигурация парсера + KeyDB
-├── docker-compose.full.yml       # Полная конфигурация всех сервисов
-├── nginx.loadbalancer.conf       # Конфигурация Nginx (оптимизированная)
-├── manage_production.sh          # 🚀 Главный скрипт управления
-├── update_production.sh          # 🔄 Обновление через git
-├── restart_production.sh         # ⏹️ Быстрый перезапуск
-├── rollback_production.sh        # 🔙 Откат к предыдущей версии
-├── status_production.sh          # 📊 Проверка статуса системы
-├── monitor_resources.sh          # 📈 Мониторинг ресурсов
-├── test_build.sh                 # 🧪 Тестирование сборки
-├── PRODUCTION_MANAGEMENT.md      # 📚 Полная документация управления
-├── QUICK_START.md                # ⚡ Быстрый старт
-├── RESOURCE_CONFIGURATION.md     # ⚙️ Конфигурация ресурсов
-└── README.md                     # Этот файл
+Client → Angie (TLS 1.3, HTTP/2, brotli/zstd/gzip) → Go API → KeyDB ← Python Parser
 ```
 
-## 🚀 Быстрый старт
+| Компонент | Описание | Образ |
+|-----------|----------|:-----:|
+| **Angie** | Reverse proxy, TLS termination, compression | 32 MB RAM |
+| **Go API** | REST API (Go 1.25, Gin, slog JSON logging) | 45 MB image |
+| **Python Parser** | Сбор данных каждые 7 мин (logging JSON) | 148 MB image |
+| **KeyDB** | In-memory хранилище (48 checkpoints, ~193 ключа) | 64 MB RAM |
+
+**Target VPS**: 1 CPU / 512 MB RAM / 6 GB SSD
+
+## Быстрый старт
 
 ### 1. Клонирование и настройка
 
 ```bash
-# Клонирование репозитория
-git clone <your-repo-url> checkpoint-system
-cd checkpoint-system/release
+git clone https://github.com/eugene-kotov/border_posts_ext.git
+cd border_posts_ext
 
-# Установка прав на выполнение
-chmod +x *.sh
-
-# Проверка готовности
-./manage_production.sh status
+# Создать .env из шаблона и настроить
+make env-init
+nano .env  # задать DOMAIN, AUTH_USERNAME, AUTH_PASSWORD
 ```
 
-### 2. Первый запуск
+### 2. Установка и запуск (Podman Quadlets)
 
 ```bash
-# Запуск системы
-./manage_production.sh restart
+# Установить Quadlet-файлы в systemd
+make install
 
-# Проверка статуса
-./manage_production.sh status
+# Собрать образы API и Parser
+make build
+
+# Запустить все сервисы
+make start
 ```
 
-### 3. Проверка работы
+### 3. Проверка
 
 ```bash
-# Проверка API
-curl http://localhost/health
-
-# Мониторинг ресурсов
-./manage_production.sh monitor
+make status   # статус всех сервисов
+make health   # проверка health endpoints
+make test     # тест API endpoints
 ```
 
-## 🔧 Управление системой
+## Управление
 
-### Основные команды
+Все операции через `make`:
 
 ```bash
-# Главное меню управления
-./manage_production.sh help
-
-# Обновление системы из git
-./manage_production.sh update main
-
-# Быстрый перезапуск
-./manage_production.sh restart
-
-# Откат к предыдущей версии
-./manage_production.sh rollback
-
-# Проверка статуса
-./manage_production.sh status
-
-# Мониторинг ресурсов
-./manage_production.sh monitor
-
-# Просмотр логов
-./manage_production.sh logs
-
-# Создание бэкапа
-./manage_production.sh backup
-
-# Очистка Docker
-./manage_production.sh clean
+make help         # список команд
+make start        # запуск
+make stop         # остановка
+make restart      # перезапуск
+make status       # статус сервисов
+make logs         # логи всех сервисов (journalctl)
+make logs-api     # логи API
+make logs-parser  # логи парсера
+make stats        # потребление ресурсов
+make health       # health checks
+make test         # тест API endpoints
+make build        # пересборка образов
+make update       # обновление образов + перезапуск
+make shell-keydb  # KeyDB CLI
+make shell-api    # shell в API контейнер
+make clean        # остановка + удаление quadlet-файлов
+make uninstall    # полная очистка (+ образы + volumes)
 ```
 
-## ⚙️ Конфигурация ресурсов
-
-Система оптимизирована для сервера с ограниченными ресурсами:
-
-### Требования к серверу
-- **CPU**: 2 ядра
-- **RAM**: 768 MB
-- **OS**: Ubuntu 24.04
-- **Go Version**: 1.23
-
-### Распределение ресурсов
-- **KeyDB**: 0.5 CPU, 150MB RAM (128MB max memory)
-- **API**: 0.8 CPU, 200MB RAM
-- **Parser**: 0.4 CPU, 150MB RAM
-- **Nginx**: 0.3 CPU, 100MB RAM
-
-**Итого**: 2.0 CPU, 600MB RAM (78% от доступных ресурсов)
-
-## 📊 API Endpoints
-
-### Публичные endpoints
-
-- `GET /health` - Проверка здоровья (без авторизации)
-
-### Защищенные endpoints (требуют Basic Auth)
-
-- `GET /api/v1/checkpoints` - Список всех пунктов пропуска
-- `GET /api/v1/checkpoints/:id` - Данные конкретного пункта пропуска
-- `GET /api/v1/checkpoints/ids` - Список ID пунктов пропуска
-- `GET /api/v1/stats` - Статистика
-
-### Примеры использования
+## TLS Сертификат
 
 ```bash
-# Health check
-curl http://localhost/health
+# Генерация Angie конфига с TLS для домена из .env
+make tls-init
 
-# Получение данных (с авторизацией)
-curl -u admin:your_password http://localhost/api/v1/checkpoints
-
-# Получение конкретного пункта пропуска
-curl -u admin:your_password http://localhost/api/v1/checkpoints/checkpoint_id
-
-# Получение статистики
-curl -u admin:your_password http://localhost/api/v1/stats
+# Проверка сертификата
+make tls-status
+make tls-test
 ```
 
-## 🔄 Парсер данных
+Сертификат выдаётся автоматически через Let's Encrypt ACME. Требования:
+- DNS A-запись домена → IP сервера
+- Порты 80 и 443 открыты
 
-### Автоматический режим
-Парсер автоматически:
-- Запускается при старте системы
-- Обновляет данные каждые 7 минут
-- Сохраняет данные в KeyDB
-- Логирует свою работу
+## API Endpoints
 
-### Ручное управление парсером
+| Метод | Путь | Auth | Описание |
+|-------|------|:----:|----------|
+| GET | `/health` | нет | Health check |
+| GET | `/api/v1/checkpoints` | Basic | Все пункты пропуска |
+| GET | `/api/v1/checkpoints/:id` | Basic | Данные одного пункта |
+| GET | `/api/v1/checkpoints/ids` | Basic | Список ID |
+| GET | `/api/v1/stats` | Basic | Сводная статистика |
 
 ```bash
-# Проверка статуса парсера
-./scripts/monitor.sh parser
+# Health
+curl https://checkpoint.truck.kz/health
 
-# Просмотр логов парсера
-./scripts/deploy.sh logs parser
-
-# Перезапуск только парсера
-docker-compose -f docker-compose.full.yml restart parser
+# Данные (с авторизацией)
+curl -u admin:password https://checkpoint.truck.kz/api/v1/checkpoints
+curl -u admin:password https://checkpoint.truck.kz/api/v1/stats
 ```
 
-## 🛡️ Безопасность
-
-### Реализованные меры
-- ✅ **Basic Authentication** для API endpoints
-- ✅ **Health Check** без авторизации
-- ✅ **Non-root пользователи** в Docker контейнерах
-- ✅ **Сетевая изоляция** через Docker networks
-- ✅ **Логирование** всех запросов
-- ✅ **Автоматические бэкапы** при обновлениях
-- ✅ **Откат к предыдущим версиям**
-
-### Рекомендации для продакшена
-1. **Измените пароли** в переменных окружения
-2. **Настроите HTTPS** с SSL сертификатами
-3. **Ограничьте доступ** к портам 6379 и 8080
-4. **Настройте файрвол**
-5. **Регулярно обновляйте** Docker образы
-6. **Мониторьте ресурсы** системы
-
-## 📈 Производительность
-
-### Оптимизированная производительность
-- **Response Time**: < 100ms для health check
-- **Memory Usage**: 600MB общее (78% от 768MB)
-- **CPU Usage**: 2.0 ядра максимум (100% от доступных)
-- **Data Update**: каждые 7 минут
-- **Go 1.23**: Улучшенная производительность на 5-10%
-- **Статическая линковка**: Быстрый запуск и минимальный размер
-
-## 🔍 Мониторинг и логирование
-
-### Доступные метрики
-- ✅ **Health Status** - статус всех сервисов
-- ✅ **Resource Usage** - CPU, память, сеть
-- ✅ **KeyDB Metrics** - память, клиенты, операции
-- ✅ **API Response Times** - время ответа endpoints
-- ✅ **Parser Status** - статус парсера и количество данных
-- ✅ **Error Rates** - количество ошибок
-- ✅ **Git History** - история обновлений и откатов
-
-### Мониторинг
-```bash
-# Полная проверка системы
-./manage_production.sh status
-
-# Мониторинг ресурсов
-./manage_production.sh monitor
-
-# Просмотр логов
-./manage_production.sh logs
-
-# Тестирование сборки
-./test_build.sh
-```
-
-## 🚨 Устранение неполадок
-
-### Частые проблемы
-
-1. **Система не запускается**
-   ```bash
-   # Проверьте статус
-   ./manage_production.sh status
-   
-   # Проверьте логи
-   ./manage_production.sh logs
-   
-   # Перезапустите систему
-   ./manage_production.sh restart
-   ```
-
-2. **API недоступен**
-   ```bash
-   # Проверьте статус
-   ./manage_production.sh status
-   
-   # Проверьте KeyDB
-   docker exec checkpoint-keydb-full keydb-cli ping
-   
-   # Перезапустите API
-   docker-compose -f docker-compose.full.yml -p checkpoint-full restart api
-   ```
-
-3. **Высокое использование ресурсов**
-   ```bash
-   # Мониторинг ресурсов
-   ./manage_production.sh monitor
-   
-   # Очистка Docker
-   ./manage_production.sh clean
-   ```
-
-4. **Проблемы с обновлением**
-   ```bash
-   # Откат к предыдущей версии
-   ./manage_production.sh rollback
-   
-   # Проверка git статуса
-   git status
-   ```
-
-## 🔄 Обновление системы
-
-### Безопасное обновление через git
+## Конфигурация (.env)
 
 ```bash
-# Обновление с main ветки
-./manage_production.sh update main
-
-# Обновление с feature ветки
-./manage_production.sh update feature/new-feature
-
-# Проверка статуса после обновления
-./manage_production.sh status
+DOMAIN=checkpoint.truck.kz    # Домен для TLS
+KEYDB_PASSWORD=               # Пароль KeyDB (опционально)
+AUTH_USERNAME=admin            # Логин API
+AUTH_PASSWORD=<secret>         # Пароль API
+RATE_LIMIT=3000               # Лимит запросов/мин
 ```
 
-### Откат к предыдущей версии
+## Ресурсы
 
-```bash
-# Показать доступные коммиты
-./manage_production.sh rollback
+| Контейнер | CPU | RAM | Реальное потребление |
+|-----------|:---:|:---:|:--------------------:|
+| KeyDB | 20% | 64M | ~9 MB |
+| API | 30% | 64M | ~5 MB |
+| Parser | 30% | 80M | ~41 MB |
+| Angie | 10% | 32M | ~3 MB |
+| **Итого** | **90%** | **240M** | **~58 MB** |
 
-# Откат к конкретному коммиту
-./manage_production.sh rollback abc123def
+## Структура проекта
+
+```
+├── api/
+│   ├── main.go              # Go API (515 LOC, slog, graceful shutdown)
+│   ├── Dockerfile.prod      # Multi-stage build (Go 1.25 → Alpine)
+│   ├── go.mod / go.sum
+│   └── keydb.conf
+├── parser/
+│   ├── new_checkpoint_data.py  # Parser (644 LOC, logging JSON)
+│   ├── links.txt               # 48 URLs для парсинга
+│   ├── Dockerfile
+│   └── requirements.txt
+├── quadlets/                 # Podman Quadlet (systemd units)
+│   ├── checkpoint-keydb.container
+│   ├── checkpoint-api.container
+│   ├── checkpoint-parser.container
+│   ├── checkpoint-angie.container
+│   ├── checkpoint-keydb.volume
+│   ├── checkpoint-angie-logs.volume
+│   ├── checkpoint-acme.volume
+│   └── checkpoint.network
+├── angie.loadbalancer.conf          # Angie config (TLS 1.3, HTTP/2)
+├── angie.loadbalancer.conf.template # Template для make tls-init
+├── docker-compose.full.yml          # Compose для dev/testing
+├── Makefile                         # Все операции
+├── setup-vps.sh                     # Bootstrap VPS
+├── .env.example                     # Шаблон конфигурации
+└── examples/                        # Примеры использования API
 ```
 
-### Ручное обновление
+## Безопасность
 
-```bash
-# Остановка системы
-docker-compose -f docker-compose.full.yml -p checkpoint-full down
+- ✅ TLS 1.3 + ACME auto-renewal
+- ✅ HTTP/2
+- ✅ HSTS (2 years)
+- ✅ Security headers (X-Frame-Options, X-Content-Type-Options)
+- ✅ Basic Auth для API
+- ✅ Rate limiting (10 req/s per IP)
+- ✅ Non-root контейнеры
+- ✅ Пароли только из .env (0 хардкодов)
+- ✅ Graceful shutdown (5s drain)
+- ✅ Structured JSON logging
 
-# Обновление кода
-git pull origin main
+## Производительность
 
-# Пересборка и запуск
-docker-compose -f docker-compose.full.yml -p checkpoint-full up -d --build
-```
+- **1,700+ rps** при 500 VUs (k6 load test)
+- **0% ошибок** под нагрузкой
+- **p95 latency**: 102ms (health), 414ms (checkpoints)
+- **Brotli/zstd/gzip** compression
+- **Pipeline batching** для KeyDB (N+1 fix)
 
-## 📚 Дополнительная документация
+## Требования
 
-- **`PRODUCTION_MANAGEMENT.md`** - Полная документация по управлению системой
-- **`QUICK_START.md`** - Краткая инструкция по быстрому старту
-- **`RESOURCE_CONFIGURATION.md`** - Подробная конфигурация ресурсов
-- **`examples/`** - Примеры использования API
-
-## 🎯 Заключение
-
-Эта система предоставляет:
-- ✅ **Автоматический сбор данных** о пунктах пропуска каждые 7 минут
-- ✅ **Высокопроизводительный REST API** на Go 1.23
-- ✅ **Оптимизацию для малых ресурсов** (2 CPU, 768MB RAM)
-- ✅ **Безопасное управление** через git обновления
-- ✅ **Автоматические бэкапы** и откат к предыдущим версиям
-- ✅ **Комплексный мониторинг** ресурсов и состояния
-- ✅ **Простое развертывание** через Docker
-- ✅ **Безопасность** и аутентификацию
-
-**Система готова к продакшену на серверах с ограниченными ресурсами!** 🚀
-
-### Ключевые особенности:
-- **Go 1.23** с улучшенной производительностью
-- **KeyDB** для быстрого доступа к данным
-- **Nginx** как прокси-сервер
-- **Python парсер** для автоматического сбора данных
-- **Полный набор скриптов** для управления через git
-
-
-
-
+- **VPS**: 1 CPU / 512 MB RAM / 6 GB SSD
+- **OS**: Ubuntu/Debian с systemd
+- **Podman**: 4.4+ (Quadlets)
+- **Make**: GNU Make
