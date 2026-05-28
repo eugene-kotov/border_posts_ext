@@ -1,6 +1,5 @@
 [Unit]
 Description=Checkpoint KeyDB - In-memory data store
-After=checkpoint.network
 
 [Container]
 Image=eqalpha/keydb:latest
