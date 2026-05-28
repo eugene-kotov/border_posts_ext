@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -327,7 +327,8 @@ func loadConfig() *Config {
 	}
 
 	if cfg.AuthUsername == "" || cfg.AuthPassword == "" {
-		log.Fatal("FATAL: AUTH_USERNAME and AUTH_PASSWORD environment variables are required")
+		slog.Error("AUTH_USERNAME and AUTH_PASSWORD environment variables are required")
+		os.Exit(1)
 	}
 
 	return cfg
@@ -352,6 +353,12 @@ func getEnvInt(key string, defaultValue int) int {
 }
 
 func main() {
+	// Инициализация structured logging (JSON)
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
+
 	config := loadConfig()
 
 	// Создаем сервис KeyDB
@@ -359,10 +366,10 @@ func main() {
 
 	// Проверяем подключение к KeyDB (не падаем при ошибке)
 	if err := keydbService.Ping(); err != nil {
-		log.Printf("⚠️  Warning: Failed to connect to KeyDB: %v", err)
-		log.Println("🔄 API will start but KeyDB-dependent endpoints will return errors")
+		slog.Warn("Failed to connect to KeyDB", "error", err)
+		slog.Info("API will start but KeyDB-dependent endpoints will return errors")
 	} else {
-		log.Println("✅ Connected to KeyDB successfully")
+		slog.Info("Connected to KeyDB", "host", config.KeyDBHost, "port", config.KeyDBPort)
 	}
 
 	// Настраиваем Gin
@@ -470,8 +477,7 @@ func main() {
 		})
 	})
 
-	log.Printf("🚀 Server starting on port %s", config.Port)
-	log.Printf("🔐 Basic auth: %s", config.AuthUsername)
+	slog.Info("Server starting", "port", config.Port, "auth_user", config.AuthUsername)
 
 	// HTTP сервер с graceful shutdown
 	srv := &http.Server{
@@ -482,7 +488,8 @@ func main() {
 	// Запускаем сервер в горутине
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start server: %v", err)
+			slog.Error("Failed to start server", "error", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -490,20 +497,20 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-quit
-	log.Printf("🛑 Received signal %v, shutting down gracefully...", sig)
+	slog.Info("Shutting down gracefully", "signal", sig.String())
 
 	// Даём 5 секунд на завершение in-flight запросов
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("⚠️  Server forced to shutdown: %v", err)
+		slog.Warn("Server forced to shutdown", "error", err)
 	}
 
 	// Закрываем KeyDB соединение
 	if err := keydbService.client.Close(); err != nil {
-		log.Printf("⚠️  KeyDB connection close error: %v", err)
+		slog.Warn("KeyDB connection close error", "error", err)
 	}
 
-	log.Println("✅ Server stopped gracefully")
+	slog.Info("Server stopped")
 }
