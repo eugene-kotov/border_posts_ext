@@ -66,7 +66,7 @@ class KeyDBManager:
         try:
             self.redis_client.ping()
             return True
-        except:
+        except (redis.ConnectionError, redis.TimeoutError, OSError):
             return False
     
     def save_checkpoint_data(self, checkpoint_data: Dict) -> bool:
@@ -131,7 +131,8 @@ class KeyDBManager:
             if match:
                 return match.group(1)
             return ""
-        except:
+        except (TypeError, AttributeError) as e:
+            print(f"⚠️ Ошибка извлечения ID из URL: {e}")
             return ""
     
     def get_all_checkpoints(self) -> List[str]:
@@ -165,8 +166,8 @@ class KeyDBManager:
             for i in sorted(load_data_raw.keys(), key=int):
                 try:
                     load_data.append(json.loads(load_data_raw[i]))
-                except:
-                    pass
+                except (json.JSONDecodeError, TypeError) as e:
+                    print(f"⚠️ Ошибка парсинга load_data[{i}]: {e}")
             
             # Получаем метаданные
             meta = self.redis_client.hgetall(f"{key_prefix}:meta")
