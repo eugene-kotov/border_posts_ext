@@ -1,0 +1,14 @@
+# Environment (contains passwords)
+.env
+
+# Generated configs (use make tls-init to regenerate)
+# angie.loadbalancer.conf is checked in with current domain
+# but can be regenerated from .template via make tls-init
+
+# Logs
+*.log
+parser/logs/
+
+# OS
+.DS_Store
+Thumbs.db

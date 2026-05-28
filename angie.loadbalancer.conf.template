@@ -1,0 +1,259 @@
+# Модули сжатия (brotli + zstd)
+load_module modules/ngx_http_brotli_filter_module.so;
+load_module modules/ngx_http_zstd_filter_module.so;
+
+events {
+    worker_connections 256;  # Уменьшено для экономии памяти
+    use epoll;               # Эффективный метод для Linux
+    multi_accept on;         # Принимать несколько соединений за раз
+}
+
+http {
+    include       /etc/angie/mime.types;
+    default_type  application/octet-stream;
+
+    # ──────────────────────────────────────────────
+    # DNS resolver (требуется для ACME и OCSP stapling)
+    # ──────────────────────────────────────────────
+    resolver 8.8.8.8 8.8.4.4 valid=300s;
+    resolver_timeout 5s;
+
+    # ──────────────────────────────────────────────
+    # ACME клиент Let's Encrypt (автоматические сертификаты)
+    # Сертификаты хранятся в /var/lib/angie/acme/
+    # Обновление автоматическое, без cron/certbot
+    # ──────────────────────────────────────────────
+    acme_client letsencrypt https://acme-v02.api.letsencrypt.org/directory;
+
+    # Logging
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for" '
+                    'upstream: $upstream_addr response_time: $upstream_response_time';
+
+    access_log /var/log/angie/access.log main;
+    error_log /var/log/angie/error.log warn;
+
+    # Basic settings
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+    client_max_body_size 10M;
+
+    # ──────────────────────────────────────────────
+    # Compression: gzip + brotli + zstd
+    # Angie автоматически выбирает алгоритм по Accept-Encoding
+    # ──────────────────────────────────────────────
+
+    # Gzip (fallback, 100% клиентов)
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 256;
+    gzip_proxied any;
+    gzip_comp_level 4;
+    gzip_types
+        text/plain
+        text/css
+        text/xml
+        text/javascript
+        application/json
+        application/javascript
+        application/xml+rss
+        application/atom+xml
+        image/svg+xml;
+
+    # Brotli (лучшее сжатие, 96% браузеров)
+    brotli on;
+    brotli_comp_level 4;
+    brotli_min_length 256;
+    brotli_types
+        text/plain
+        text/css
+        text/xml
+        text/javascript
+        application/json
+        application/javascript
+        application/xml+rss
+        application/atom+xml
+        image/svg+xml;
+
+    # Zstd (лучшая скорость, растущая поддержка)
+    zstd on;
+    zstd_comp_level 3;
+    zstd_min_length 256;
+    zstd_types
+        text/plain
+        text/css
+        text/xml
+        text/javascript
+        application/json
+        application/javascript
+        application/xml+rss
+        application/atom+xml
+        image/svg+xml;
+
+    # Rate limiting
+    limit_req_zone $binary_remote_addr zone=api:1m rate=10r/s;
+    limit_req_zone $binary_remote_addr zone=health:1m rate=30r/s;
+
+    # Upstream API server
+    upstream api_backend {
+        server api:8080 max_fails=3 fail_timeout=30s weight=1;
+        # NOTE: Активные health probes доступны только в Angie PRO
+    }
+
+    upstream health_backend {
+        server api:8080;
+    }
+
+    # ──────────────────────────────────────────────
+    # HTTP (порт 80): ACME challenge + redirect → HTTPS
+    # Health check остаётся на HTTP для Docker healthcheck
+    # ──────────────────────────────────────────────
+    server {
+        listen 80;
+        server_name %%DOMAIN%%;
+
+        # ACME HTTP-01 challenge (Let's Encrypt валидация)
+        acme letsencrypt;
+
+        # Health check на HTTP — для Docker/Podman healthcheck
+        # Не редиректим, чтобы wget/curl без TLS работал
+        location /health {
+            limit_req zone=health burst=10 nodelay;
+            proxy_pass http://health_backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_connect_timeout 5s;
+            proxy_read_timeout 5s;
+        }
+
+        # stub_status на HTTP для мониторинга
+        location /status {
+            stub_status on;
+            access_log off;
+            allow 127.0.0.1;
+            allow 10.0.0.0/8;
+            allow 172.16.0.0/12;
+            deny all;
+        }
+
+        # Всё остальное → HTTPS
+        location / {
+            return 301 https://$host$request_uri;
+        }
+    }
+
+    # ──────────────────────────────────────────────
+    # HTTPS (порт 443): TLS 1.3 + HTTP/2
+    # ──────────────────────────────────────────────
+    server {
+        listen 443 ssl;
+        http2 on;
+        server_name %%DOMAIN%%;
+
+        # ── TLS сертификат (ACME автоматический) ──
+        ssl_certificate         $acme_cert_letsencrypt;
+        ssl_certificate_key     $acme_cert_key_letsencrypt;
+
+        # ── TLS 1.3 only ──
+        ssl_protocols TLSv1.3;
+
+        # ── OCSP Stapling (ускоряет TLS handshake) ──
+        ssl_stapling on;
+        ssl_stapling_verify on;
+
+        # ── TLS session cache ──
+        ssl_session_cache shared:SSL:1m;
+        ssl_session_timeout 1d;
+        ssl_session_tickets off;  # Безопаснее без tickets
+
+        # ── Security headers ──
+        add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+        # ── Health check ──
+        location /health {
+            limit_req zone=health burst=10 nodelay;
+            proxy_pass http://health_backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_connect_timeout 5s;
+            proxy_send_timeout 5s;
+            proxy_read_timeout 5s;
+            proxy_next_upstream error timeout invalid_header http_500 http_502 http_503 http_504;
+        }
+
+        # ── API endpoints ──
+        location /api/ {
+            limit_req zone=api burst=20 nodelay;
+            proxy_pass http://api_backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_connect_timeout 10s;
+            proxy_send_timeout 30s;
+            proxy_read_timeout 30s;
+            proxy_next_upstream error timeout invalid_header http_500 http_502 http_503 http_504;
+            proxy_next_upstream_tries 3;
+            proxy_next_upstream_timeout 10s;
+        }
+
+        # ── Root ──
+        location / {
+            limit_req zone=api burst=20 nodelay;
+            proxy_pass http://api_backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_connect_timeout 10s;
+            proxy_send_timeout 30s;
+            proxy_read_timeout 30s;
+            proxy_next_upstream error timeout invalid_header http_500 http_502 http_503 http_504;
+            proxy_next_upstream_tries 3;
+            proxy_next_upstream_timeout 10s;
+        }
+
+        # ── Мониторинг (stub_status) ──
+        location /status {
+            stub_status on;
+            access_log off;
+            allow 127.0.0.1;
+            allow 10.0.0.0/8;
+            allow 172.16.0.0/12;
+            deny all;
+        }
+
+        # ──────────────────────────────────────────────
+        # Angie PRO features (закомментированы)
+        # ──────────────────────────────────────────────
+        # location /api/status/ {
+        #     api /status/;
+        #     access_log off;
+        #     allow 127.0.0.1;
+        #     allow 172.16.0.0/12;
+        #     deny all;
+        # }
+        # location /console/ {
+        #     api_ui;
+        #     allow 127.0.0.1;
+        #     allow 172.16.0.0/12;
+        #     deny all;
+        # }
+
+        # ── Error pages ──
+        error_page 500 502 503 504 /50x.html;
+        location = /50x.html {
+            root /usr/share/angie/html;
+        }
+    }
+}
