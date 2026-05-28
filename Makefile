@@ -213,6 +213,7 @@ build: ## Build API and Parser container images
 # ─────────────────────────────────────────────────────────────
 start: ## Start all Checkpoint services
 	@echo "🚀 Starting Checkpoint System..."
+	@mkdir -p $(PROJECT_DIR)/parser/logs
 	@$(SYSTEMCTL) start checkpoint-keydb
 	@echo "  ⏳ Waiting for KeyDB..."
 	@sleep 3
